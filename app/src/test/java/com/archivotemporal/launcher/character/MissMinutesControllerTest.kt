@@ -82,6 +82,12 @@ class MissMinutesControllerTest {
             assertEquals(MissMinutesPhase.Notifying, controller.state.value.phase)
             advanceTimeBy(2_000)
             runCurrent()
+            if (moving) {
+                assertEquals(MissMinutesPhase.Moving, controller.state.value.phase)
+                assertNull(controller.state.value.notice)
+                advanceTimeBy(controller.state.value.transitionMillis.toLong() + 190)
+                runCurrent()
+            }
             assertEquals(MissMinutesPhase.Idle, controller.state.value.phase)
             assertNull(controller.state.value.notice)
         }
@@ -152,6 +158,34 @@ class MissMinutesControllerTest {
         runCurrent()
         assertEquals(MissMinutesPhase.Pointing, controller.state.value.phase)
         advanceTimeBy(controller.state.value.transitionMillis.toLong())
+        runCurrent()
+        assertEquals(MissMinutesPhase.Idle, controller.state.value.phase)
+    }
+
+    @Test fun notice_resumes_interrupted_focus_when_no_new_focus_arrives() = runTest {
+        val controller = MissMinutesController(backgroundScope)
+        controller.onFocusChanged(SlotId.MUSIC, 0.9f)
+        runCurrent()
+        assertEquals(MissMinutesPhase.Moving, controller.state.value.phase)
+        advanceTimeBy(100)
+
+        controller.onNotice(Notice("Sin conexión"))
+        runCurrent()
+        assertEquals(MissMinutesPhase.Notifying, controller.state.value.phase)
+        assertEquals(SlotId.MUSIC, controller.state.value.focusedSlot)
+        assertEquals(0.9f, controller.state.value.targetX)
+
+        advanceTimeBy(2_500)
+        runCurrent()
+        assertEquals(MissMinutesPhase.Moving, controller.state.value.phase)
+        assertEquals(SlotId.MUSIC, controller.state.value.focusedSlot)
+        assertEquals(0.9f, controller.state.value.targetX)
+        assertTrue(controller.state.value.transitionMillis in 220..360)
+
+        advanceTimeBy(controller.state.value.transitionMillis.toLong())
+        runCurrent()
+        assertEquals(MissMinutesPhase.Pointing, controller.state.value.phase)
+        advanceTimeBy(190)
         runCurrent()
         assertEquals(MissMinutesPhase.Idle, controller.state.value.phase)
     }

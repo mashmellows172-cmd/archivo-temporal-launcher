@@ -68,8 +68,14 @@ class MissMinutesController(
     }
 
     fun onNotice(notice: Notice) {
+        val previous = mutableState.value
+        if (previous.phase == MissMinutesPhase.Moving) {
+            previous.focusedSlot?.let { slotId ->
+                pendingFocus = PendingFocus(slotId, previous.targetX)
+            }
+        }
         cancelTransitions()
-        mutableState.value = mutableState.value.copy(
+        mutableState.value = previous.copy(
             phase = MissMinutesPhase.Notifying,
             transitionMillis = MissMinutesMotion.NOTICE_MILLIS.toInt(),
             notice = notice,
