@@ -47,15 +47,20 @@ class HomeSlotsTest {
     }
 
     @Test
-    fun sanitize_rejects_blank_package_names() {
+    fun sanitize_clears_blank_package_names_without_reordering_slots() {
+        val first = AppDestination("com.example.first", "First", null)
         val blankPackage = AppDestination("  ", "Blank", null)
+        val third = AppDestination("com.example.third", "Third", null)
 
-        try {
-            HomeSlots.sanitize(listOf(blankPackage), emptySet())
-        } catch (_: IllegalArgumentException) {
-            return
-        }
+        val slots = HomeSlots.sanitize(
+            listOf(first, blankPackage, third),
+            setOf(first.packageName, blankPackage.packageName, third.packageName),
+        )
 
-        throw AssertionError("Expected blank package names to be rejected")
+        assertEquals(5, slots.size)
+        assertSame(first, slots[0].assignment)
+        assertNull(slots[1].assignment)
+        assertSame(third, slots[2].assignment)
+        assertEquals(listOf(SlotId.CONTINUE, SlotId.MOVIES, SlotId.TV), slots.take(3).map { it.id })
     }
 }
