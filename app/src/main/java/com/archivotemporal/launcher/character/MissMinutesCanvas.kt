@@ -42,6 +42,7 @@ fun MissMinutesCanvas(state: MissMinutesState, modifier: Modifier = Modifier) {
         } else if (state.motionMode == MotionMode.REDUCED) {
             position.snapTo(state.targetX)
         } else if (state.phase != MissMinutesPhase.Moving) {
+            position.snapTo(state.targetX)
             return@LaunchedEffect
         } else {
             position.animateTo(
