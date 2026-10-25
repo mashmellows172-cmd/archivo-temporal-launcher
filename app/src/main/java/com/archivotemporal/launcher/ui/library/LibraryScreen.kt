@@ -53,7 +53,8 @@ fun LibraryScreen(
         val id = orderedSlots[index].id
         selectedSlot = id
         clearSelected = false
-        if (candidatePackage != null) onAssign(id, candidatePackage) else choosingApps = true
+        if (candidatePackage != null) onAssign(id, candidatePackage)
+        choosingApps = true
     }
 
     SecondaryFrame("LIBRARY", "library-screen", onBack, onDirection = { key ->

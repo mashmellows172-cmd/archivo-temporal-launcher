@@ -159,6 +159,34 @@ class SecondaryScreensTest {
         assertEquals(listOf(SlotId.MOVIES to null), writes)
     }
 
+    @Test fun candidateAssignmentCanBeClearedWithDpadOnly() {
+        val writes = mutableListOf<Pair<SlotId, String?>>()
+        rule.activity.setContent {
+            ArchiveTheme {
+                LibraryScreen(
+                    slots = emptySlots(),
+                    apps = listOf(app("Cinema", "com.cinema")),
+                    candidatePackage = "com.cinema",
+                    onAssign = { slot, packageName -> writes += slot to packageName },
+                    onBack = {},
+                )
+            }
+        }
+
+        rule.onNodeWithTag("library-screen").performKeyInput {
+            pressKey(Key.DirectionRight)
+            pressKey(Key.DirectionCenter)
+            pressKey(Key.DirectionUp)
+        }
+        rule.onNodeWithTag("library-clear").assertIsSelected()
+        rule.onNodeWithTag("library-screen").performKeyInput { pressKey(Key.DirectionCenter) }
+
+        assertEquals(
+            listOf(SlotId.MOVIES to "com.cinema", SlotId.MOVIES to null),
+            writes,
+        )
+    }
+
     @Test fun settingsChangesMotionTextureAndHints() {
         var motion: MotionMode? = null
         var texture: TextureLevel? = null
