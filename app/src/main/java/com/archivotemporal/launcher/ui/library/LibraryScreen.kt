@@ -41,6 +41,7 @@ fun LibraryScreen(
     var slotIndex by remember { mutableIntStateOf(0) }
     var appIndex by remember { mutableIntStateOf(0) }
     var choosingApps by remember { mutableStateOf(false) }
+    var clearSelected by remember { mutableStateOf(false) }
     val appListState = rememberLazyListState()
     val orderedSlots = SlotId.entries.map { id -> slots.firstOrNull { it.id == id } ?: HomeSlot(id, id.name, null) }
     androidx.compose.runtime.LaunchedEffect(appIndex, choosingApps) {
@@ -51,6 +52,7 @@ fun LibraryScreen(
         slotIndex = index
         val id = orderedSlots[index].id
         selectedSlot = id
+        clearSelected = false
         if (candidatePackage != null) onAssign(id, candidatePackage) else choosingApps = true
     }
 
@@ -58,11 +60,27 @@ fun LibraryScreen(
         when (key) {
             Key.DirectionLeft -> { if (!choosingApps) slotIndex = (slotIndex - 1).coerceAtLeast(0); true }
             Key.DirectionRight -> { if (!choosingApps) slotIndex = (slotIndex + 1).coerceAtMost(orderedSlots.lastIndex); true }
-            Key.DirectionUp -> { if (choosingApps) appIndex = (appIndex - 1).coerceAtLeast(0); true }
-            Key.DirectionDown -> { if (choosingApps && apps.isNotEmpty()) appIndex = (appIndex + 1).coerceAtMost(apps.lastIndex); true }
+            Key.DirectionUp -> {
+                if (choosingApps) {
+                    if (appIndex == 0) clearSelected = true else appIndex--
+                }
+                true
+            }
+            Key.DirectionDown -> {
+                if (choosingApps && clearSelected) {
+                    clearSelected = false
+                } else if (choosingApps && apps.isNotEmpty()) {
+                    appIndex = (appIndex + 1).coerceAtMost(apps.lastIndex)
+                }
+                true
+            }
             Key.Enter, Key.NumPadEnter, Key.DirectionCenter -> {
-                if (choosingApps) selectedSlot?.let { slot -> apps.getOrNull(appIndex)?.let { onAssign(slot, it.packageName) } }
-                else chooseSlot(slotIndex)
+                if (choosingApps) {
+                    selectedSlot?.let { slot ->
+                        if (clearSelected) onAssign(slot, null)
+                        else apps.getOrNull(appIndex)?.let { onAssign(slot, it.packageName) }
+                    }
+                } else chooseSlot(slotIndex)
                 true
             }
             else -> false
@@ -89,8 +107,8 @@ fun LibraryScreen(
             if (selectedSlot != null) {
                 ArchiveChoice(
                     label = "LIMPIAR DESTINO",
-                    selected = false,
-                    onClick = { selectedSlot?.let { onAssign(it, null) } },
+                    selected = clearSelected,
+                    onClick = { clearSelected = true; selectedSlot?.let { onAssign(it, null) } },
                     modifier = Modifier.testTag("library-clear"),
                 )
             }
@@ -99,8 +117,12 @@ fun LibraryScreen(
                     itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
                         ArchiveChoice(
                             label = app.label,
-                            selected = index == appIndex,
-                            onClick = { appIndex = index; selectedSlot?.let { onAssign(it, app.packageName) } },
+                            selected = !clearSelected && index == appIndex,
+                            onClick = {
+                                clearSelected = false
+                                appIndex = index
+                                selectedSlot?.let { onAssign(it, app.packageName) }
+                            },
                             modifier = Modifier.testTag("library-app-${app.packageName}"),
                         )
                     }

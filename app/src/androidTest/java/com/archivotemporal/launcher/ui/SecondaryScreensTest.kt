@@ -5,6 +5,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
@@ -131,6 +132,31 @@ class SecondaryScreensTest {
             listOf(SlotId.MOVIES to "com.cinema", SlotId.MOVIES to null),
             writes,
         )
+    }
+
+    @Test fun libraryClearIsReachableAndActivatedWithDpadOnly() {
+        val writes = mutableListOf<Pair<SlotId, String?>>()
+        rule.activity.setContent {
+            ArchiveTheme {
+                LibraryScreen(
+                    slots = emptySlots(),
+                    apps = listOf(app("Cinema", "com.cinema")),
+                    candidatePackage = null,
+                    onAssign = { slot, packageName -> writes += slot to packageName },
+                    onBack = {},
+                )
+            }
+        }
+
+        rule.onNodeWithTag("library-screen").performKeyInput {
+            pressKey(Key.DirectionRight)
+            pressKey(Key.DirectionCenter)
+            pressKey(Key.DirectionUp)
+        }
+        rule.onNodeWithTag("library-clear").assertIsSelected()
+        rule.onNodeWithTag("library-screen").performKeyInput { pressKey(Key.DirectionCenter) }
+
+        assertEquals(listOf(SlotId.MOVIES to null), writes)
     }
 
     @Test fun settingsChangesMotionTextureAndHints() {
