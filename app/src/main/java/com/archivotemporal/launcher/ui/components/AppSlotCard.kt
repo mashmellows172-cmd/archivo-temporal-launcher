@@ -40,7 +40,7 @@ fun AppSlotCard(id: SlotId, label: String, focused: Boolean, onSelect: () -> Uni
         horizontalAlignment = Alignment.Start,
     ) {
         SlotGlyph(id, foreground, Modifier.weight(1f))
-        Text(label, color = foreground, style = ArchiveType.slot, maxLines = 1)
+        Text(label, color = foreground, style = ArchiveType.slot, maxLines = 2)
     }
 }
 

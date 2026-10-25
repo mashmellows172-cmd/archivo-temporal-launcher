@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.tv.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -25,7 +26,11 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.archivotemporal.launcher.character.MissMinutesCanvas
 import com.archivotemporal.launcher.character.MissMinutesState
 import com.archivotemporal.launcher.domain.SlotId
@@ -48,6 +53,8 @@ fun HomeScreen(
     notice: String? = null,
 ) {
     val focusRequester = remember { FocusRequester() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val slotHeight = 126.dp + (64f * (LocalDensity.current.fontScale - 1f).coerceAtLeast(0f)).dp
     val activateSlot: (SlotId) -> Unit = { id ->
         val focus = state.focus
         if (focus is HomeFocus.Utility) {
@@ -71,6 +78,13 @@ fun HomeScreen(
         onAction(HomeAction.Select)
     }
     LaunchedEffect(focusRequester) { focusRequester.requestFocus() }
+    DisposableEffect(lifecycleOwner, focusRequester) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) focusRequester.requestFocus()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     TemporalFrame(
         texture = state.settings.textureLevel,
         modifier = Modifier.fillMaxSize().testTag("home")
@@ -101,7 +115,7 @@ fun HomeScreen(
                     modifier = Modifier.align(Alignment.TopStart).padding(top = 88.dp).width(104.dp),
                 )
                 Row(
-                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(126.dp),
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(slotHeight),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     SlotId.entries.forEach { id ->
@@ -122,7 +136,7 @@ fun HomeScreen(
                 }
                 Box(
                     Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(112.dp)
-                        .offset(y = (-138).dp).testTag("miss-minutes"),
+                        .offset(y = -(slotHeight + 12.dp)).testTag("miss-minutes"),
                 ) {
                     MissMinutesCanvas(missMinutesState, Modifier.fillMaxSize())
                 }
