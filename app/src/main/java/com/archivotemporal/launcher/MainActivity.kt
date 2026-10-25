@@ -6,19 +6,10 @@ import android.view.WindowInsets
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.tv.material3.Text
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.key
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -31,14 +22,18 @@ import com.archivotemporal.launcher.home.HomeAction
 import com.archivotemporal.launcher.home.HomeEffect
 import com.archivotemporal.launcher.home.HomeFocus
 import com.archivotemporal.launcher.home.HomeViewModel
-import com.archivotemporal.launcher.home.LauncherScreen
+import com.archivotemporal.launcher.navigation.LauncherNavigator
+import com.archivotemporal.launcher.navigation.Screen
 import com.archivotemporal.launcher.preferences.DataStoreLauncherPreferences
+import com.archivotemporal.launcher.ui.apps.AppsScreen
 import com.archivotemporal.launcher.ui.home.HomeScreen
-import com.archivotemporal.launcher.ui.theme.ArchiveColor
+import com.archivotemporal.launcher.ui.library.LibraryScreen
+import com.archivotemporal.launcher.ui.search.SearchScreen
+import com.archivotemporal.launcher.ui.settings.SettingsScreen
 import com.archivotemporal.launcher.ui.theme.ArchiveTheme
-import com.archivotemporal.launcher.ui.theme.ArchiveType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val Context.archiveDataStore by preferencesDataStore("archive_settings")
@@ -47,12 +42,15 @@ class GuideViewModel : ViewModel() {
     val controller = MissMinutesController(viewModelScope)
 }
 
+class NavigationViewModel : ViewModel() {
+    val navigator = LauncherNavigator()
+}
+
 class MainActivity : ComponentActivity() {
+    private val catalog by lazy { AndroidAppCatalog(applicationContext) }
+    private val preferences by lazy { DataStoreLauncherPreferences(applicationContext.archiveDataStore, catalog) }
+    private val launcher by lazy { AndroidAppLauncher(applicationContext) }
     private val homeViewModel: HomeViewModel by viewModels {
-        val appContext = applicationContext
-        val catalog = AndroidAppCatalog(appContext)
-        val preferences = DataStoreLauncherPreferences(appContext.archiveDataStore, catalog)
-        val launcher = AndroidAppLauncher(appContext)
         object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -60,6 +58,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     private val guideViewModel: GuideViewModel by viewModels()
+    private val navigationViewModel: NavigationViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +67,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by homeViewModel.state.collectAsState()
             val guide by guideViewModel.controller.state.collectAsState()
+            val screen by navigationViewModel.navigator.screen.collectAsState()
             val controller = guideViewModel.controller
 
             LaunchedEffect(state.settings.motionMode) { controller.setMotionMode(state.settings.motionMode) }
@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
                                 controller.onLaunchStarted()
                                 homeViewModel.executeLaunch(effect.packageName)
                             }
-                            is HomeEffect.OpenScreen -> Unit
+                            is HomeEffect.OpenScreen -> navigationViewModel.navigator.open(effect.screen)
                             is HomeEffect.ShowNotice -> {
                                 controller.onNotice(Notice(effect.message))
                             }
@@ -95,17 +95,47 @@ class MainActivity : ComponentActivity() {
                 }
             }
             ArchiveTheme {
-                if (state.screen == LauncherScreen.HOME) {
-                    HomeScreen(state, homeViewModel::dispatch, guide, guide.notice?.message)
-                } else {
-                    Box(Modifier.fillMaxSize().onPreviewKeyEvent {
-                        if (it.type == KeyEventType.KeyDown && (it.key == Key.Back || it.key == Key.Escape)) {
-                            homeViewModel.dispatch(HomeAction.Back)
-                            true
-                        } else false
-                    }.focusable()) {
-                        Text(state.screen.name, color = ArchiveColor.cream, style = ArchiveType.heading)
+                val dispatchHome: (HomeAction) -> Unit = { action ->
+                    homeViewModel.dispatch(action)
+                    val requested = homeViewModel.state.value.screen
+                    if (requested != com.archivotemporal.launcher.home.LauncherScreen.HOME) {
+                        navigationViewModel.navigator.open(requested)
                     }
+                }
+                val backHome = {
+                    navigationViewModel.navigator.back()
+                    homeViewModel.dispatch(HomeAction.Back)
+                    Unit
+                }
+                when (val destination = screen) {
+                    Screen.Home -> HomeScreen(state, dispatchHome, guide, guide.notice?.message)
+                    Screen.Applications -> AppsScreen(
+                        apps = state.installedApps,
+                        onAssign = { navigationViewModel.navigator.open(Screen.Library(it.packageName)) },
+                        onBack = backHome,
+                        texture = state.settings.textureLevel,
+                    )
+                    Screen.Search -> SearchScreen(
+                        apps = state.installedApps,
+                        onLaunch = { homeViewModel.executeLaunch(it.packageName) },
+                        onBack = backHome,
+                        texture = state.settings.textureLevel,
+                    )
+                    is Screen.Library -> LibraryScreen(
+                        slots = state.settings.slots,
+                        apps = state.installedApps,
+                        candidatePackage = destination.candidatePackage,
+                        onAssign = { slot, packageName -> lifecycleScope.launch { preferences.assign(slot, packageName) } },
+                        onBack = backHome,
+                        texture = state.settings.textureLevel,
+                    )
+                    Screen.Settings -> SettingsScreen(
+                        settings = state.settings,
+                        onMotionMode = { lifecycleScope.launch { preferences.setMotionMode(it) } },
+                        onTextureLevel = { lifecycleScope.launch { preferences.setTextureLevel(it) } },
+                        onHintsVisible = { lifecycleScope.launch { preferences.setHintsVisible(it) } },
+                        onBack = backHome,
+                    )
                 }
             }
         }
